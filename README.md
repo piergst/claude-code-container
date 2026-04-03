@@ -1,6 +1,12 @@
 # Claude Code Container
 
-Isolated Docker container to run Claude Code, based on the Anthropic reference setup.
+Docker container to run Claude Code in an isolated environment, based on the [Anthropic reference devcontainer](https://github.com/anthropics/claude-code/tree/main/.devcontainer).
+
+## Why run Claude Code in a container?
+
+Anthropic recommends running Claude Code inside a container when using `--dangerously-skip-permissions` for unattended operation. The container provides filesystem isolation and network restrictions (firewall) that limit what Claude can access if something goes wrong. See the [official documentation](https://code.claude.com/docs/en/devcontainer) for more details.
+
+This repo strips the devcontainer.json (VS Code integration) and provides a simple shell script to launch the container directly with Docker.
 
 ## Contents
 
@@ -27,8 +33,6 @@ cd ~/my-project
 ./claude-container.sh
 ```
 
-The script mounts the current directory at the same path inside the container, allowing Claude Code to share session history between the host and the container.
-
 Once inside the container:
 
 ```bash
@@ -36,6 +40,12 @@ claude
 ```
 
 ## How it works
+
+### Shared session history
+
+Claude Code stores session history based on the absolute path of the project. The original devcontainer mounts everything under `/workspace`, which means sessions created inside the container are not visible when running Claude Code directly on the host (and vice versa).
+
+To fix this, `claude-container.sh` mounts the project directory at the **same absolute path** inside the container (`-v "$PROJECT_DIR:$PROJECT_DIR"` + `-w "$PROJECT_DIR"`). This way Claude Code sees the exact same path in both environments, and session history is seamlessly shared between the host and the container.
 
 ### Bind mounts
 
@@ -46,11 +56,14 @@ claude
 | `~/.claude` | `/home/node/.claude` | Claude Code config and sessions |
 | `/run/user/$UID/bus` | `/run/user/1000/bus` | D-Bus socket (notifications) |
 
-### Desktop notifications
+### Isolation caveats
 
-The host's D-Bus session socket is mounted into the container, allowing `notify-send` to send notifications to the host desktop. `libnotify-bin` is installed in the image.
+This setup trades some isolation for convenience. Two things weaken the container boundary compared to a fully isolated devcontainer:
 
-> **Note**: mounting the D-Bus socket exposes the host's session bus to the container. To restrict exposure to notifications only, use `xdg-dbus-proxy` with a filter on `org.freedesktop.Notifications`.
+- **Claude config and credentials** (`~/.claude`, `~/.claude.json`) are shared from the host. A malicious process inside the container could read or exfiltrate these.
+- **D-Bus session socket** is mounted for desktop notifications. This exposes the host's session bus, which in theory allows interaction with other D-Bus services (file manager, secret manager, etc.), not just notifications. To restrict exposure to notifications only, use `xdg-dbus-proxy` with a filter on `org.freedesktop.Notifications`.
+
+For trusted repositories this is a reasonable tradeoff. For untrusted code, consider removing the D-Bus mount and using isolated credentials.
 
 ### Firewall
 
