@@ -82,3 +82,35 @@ sudo /usr/local/bin/init-firewall.sh
 ### Adding domains to the firewall
 
 Edit the `for domain in ...` loop in `init-firewall.sh`.
+
+# Fix: WebSocket missing with Caido SDK on Node < 21
+
+## Error
+
+```
+Error: WebSocket implementation missing; on Node you can `import WebSocket from 'ws';`
+and pass `webSocketImpl: WebSocket` to `createClient`
+```
+
+## Cause
+
+Node < 21 does not expose a global `WebSocket`. The Caido SDK (`@caido/sdk-client`) uses `graphql-ws` under the hood, which expects `globalThis.WebSocket` to exist.
+
+## Fix
+
+Add at the top of `lib/client.ts`, **before** the SDK import:
+
+```typescript
+import WebSocket from "ws";
+(globalThis as any).WebSocket = WebSocket;
+```
+
+Make sure `ws` is installed:
+
+```bash
+npm install ws
+```
+
+## Typical context
+
+Happens when running the client inside a container or any Node 20 environment where `ws` is present in `node_modules` but not exposed globally.
