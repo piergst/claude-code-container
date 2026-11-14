@@ -1,116 +1,148 @@
-# Claude Code Container
+---
+description: Exécute un agent de code dans un conteneur Docker isolé, en partageant ses sessions avec l'hôte.
+---
 
-Docker container to run Claude Code in an isolated environment, based on the [Anthropic reference devcontainer](https://github.com/anthropics/claude-code/tree/main/.devcontainer).
+# claude-code-container
 
-## Why run Claude Code in a container?
+Conteneur Docker pour exécuter Claude Code dans un environnement isolé, dérivé du [devcontainer de
+référence d'Anthropic](https://github.com/anthropics/claude-code/tree/main/.devcontainer).
 
-Anthropic recommends running Claude Code inside a container when using `--dangerously-skip-permissions` for unattended operation. The container provides filesystem isolation and network restrictions (firewall) that limit what Claude can access if something goes wrong. See the [official documentation](https://code.claude.com/docs/en/devcontainer) for more details.
+## Pourquoi exécuter Claude Code dans un conteneur ?
 
-This repo strips the devcontainer.json (VS Code integration) and provides a simple shell script to launch the container directly with Docker.
+Anthropic recommande d'exécuter Claude Code dans un conteneur quand on utilise
+`--dangerously-skip-permissions` en fonctionnement non surveillé. Le conteneur apporte une isolation
+du système de fichiers et des restrictions réseau (pare-feu) qui limitent ce à quoi Claude peut
+accéder en cas d'incident. Voir la
+[documentation officielle](https://code.claude.com/docs/en/devcontainer).
 
-## Contents
+Ce dépôt retire le `devcontainer.json` (intégration VS Code) et fournit un simple script shell pour
+lancer le conteneur directement avec Docker.
 
-- `Dockerfile` - Image based on Node.js 20 with Claude Code, ZSH, git-delta, firewall
-- `init-firewall.sh` - Restrictive iptables/ipset rules (outbound whitelist only)
-- `claude-container.sh` - Wrapper script to quickly launch the container
+## Contenu
 
-## Prerequisites
+- `Dockerfile` — image basée sur Node.js 20 avec Claude Code, ZSH, git-delta et le pare-feu ;
+- `init-firewall.sh` — règles iptables/ipset restrictives (liste blanche sortante uniquement) ;
+- `claude-code-container.sh` — script d'enveloppe pour lancer le conteneur.
 
-- Docker
-- A Claude account (claude.ai)
-- `libnotify` on the host (optional, for desktop notifications)
+## Prérequis
 
-## Build
+- Docker ;
+- un compte Claude (claude.ai) ;
+- `libnotify` sur l'hôte (facultatif, pour les notifications de bureau).
+
+## Installation
 
 ```bash
 docker build -t claude-code:latest .
 ```
 
-## Usage
+## Utilisation
+
+Depuis le dossier du projet :
 
 ```bash
-cd ~/my-project
-./claude-container.sh
+cd ~/mon-projet
+./claude-code-container.sh
 ```
 
-Once inside the container:
+Puis, dans le conteneur :
 
 ```bash
 claude
 ```
 
-## How it works
+## Fonctionnement
 
-### Shared session history
+### Historique de sessions partagé
 
-Claude Code stores session history based on the absolute path of the project. The original devcontainer mounts everything under `/workspace`, which means sessions created inside the container are not visible when running Claude Code directly on the host (and vice versa).
+Claude Code range l'historique de sessions sur le chemin absolu du projet. Le devcontainer d'origine
+monte tout sous `/workspace` : les sessions créées dans le conteneur ne sont donc pas visibles quand
+on lance Claude Code directement sur l'hôte, et inversement.
 
-To fix this, `claude-container.sh` mounts the project directory at the **same absolute path** inside the container (`-v "$PROJECT_DIR:$PROJECT_DIR"` + `-w "$PROJECT_DIR"`). This way Claude Code sees the exact same path in both environments, and session history is seamlessly shared between the host and the container.
+Pour corriger cela, `claude-code-container.sh` monte le dossier du projet au **même chemin absolu**
+dans le conteneur (`-v "$PROJECT_DIR:$PROJECT_DIR"` et `-w "$PROJECT_DIR"`). Claude Code voit ainsi
+exactement le même chemin des deux côtés, et l'historique de sessions est partagé sans couture entre
+l'hôte et le conteneur.
 
-### Bind mounts
+Sans le montage du dossier de sessions, `docker run --rm` efface les sessions à la fin du conteneur :
+`~/.claude` et `~/.claude.json` sont montés depuis l'hôte pour qu'elles persistent et restent
+visibles des deux côtés.
 
-| Host | Container | Purpose |
-|------|-----------|---------|
-| `$(pwd)` | `$(pwd)` | Project (same path = shared session history) |
-| `~/.claude.json` | `/home/node/.claude.json` | Claude auth |
-| `~/.claude` | `/home/node/.claude` | Claude Code config and sessions |
-| `/run/user/$UID/bus` | `/run/user/1000/bus` | D-Bus socket (notifications) |
+### Montages
 
-### Isolation caveats
+| Hôte | Conteneur | Rôle |
+|------|-----------|------|
+| `$(pwd)` | `$(pwd)` | Projet (même chemin = historique de sessions partagé) |
+| `~/.claude.json` | `/home/node/.claude.json` | Authentification Claude |
+| `~/.claude` | `/home/node/.claude` | Configuration et sessions de Claude Code |
+| `/run/user/$UID/bus` | `/run/user/1000/bus` | Socket D-Bus (notifications) |
 
-This setup trades some isolation for convenience. Two things weaken the container boundary compared to a fully isolated devcontainer:
+### Limites d'isolation
 
-- **Claude config and credentials** (`~/.claude`, `~/.claude.json`) are shared from the host. A malicious process inside the container could read or exfiltrate these.
-- **D-Bus session socket** is mounted for desktop notifications. This exposes the host's session bus, which in theory allows interaction with other D-Bus services (file manager, secret manager, etc.), not just notifications. To restrict exposure to notifications only, use `xdg-dbus-proxy` with a filter on `org.freedesktop.Notifications`.
+Cette configuration échange une partie de l'isolation contre de la commodité. Deux points
+affaiblissent la frontière du conteneur par rapport à un devcontainer pleinement isolé :
 
-For trusted repositories this is a reasonable tradeoff. For untrusted code, consider removing the D-Bus mount and using isolated credentials.
+- **la configuration et les identifiants de Claude** (`~/.claude`, `~/.claude.json`) sont partagés
+  depuis l'hôte : un processus malveillant dans le conteneur peut les lire ou les exfiltrer ;
+- **la socket D-Bus** est montée pour les notifications de bureau. Elle expose le bus de session de
+  l'hôte, ce qui permet en théorie d'interagir avec d'autres services (gestionnaire de fichiers,
+  gestionnaire de secrets…), et pas seulement avec les notifications. Pour n'exposer que les
+  notifications, utiliser `xdg-dbus-proxy` avec un filtre sur `org.freedesktop.Notifications`.
 
-### Firewall
+Pour des dépôts de confiance, le compromis est raisonnable. Pour du code non fiable, envisager de
+retirer le montage D-Bus et d'utiliser des identifiants isolés.
 
-The container ships with a firewall script (`init-firewall.sh`) that enforces a default-deny policy and only allows required domains: npm registry, GitHub, Anthropic API, Sentry, Statsig, VS Code marketplace.
+### Pare-feu
 
-To enable the firewall inside the container:
+Le conteneur embarque un script de pare-feu (`init-firewall.sh`) en politique de refus par défaut,
+n'autorisant que les domaines nécessaires : registre npm, GitHub, API Anthropic, Sentry, Statsig,
+place de marché VS Code.
+
+Pour l'activer dans le conteneur :
 
 ```bash
 sudo /usr/local/bin/init-firewall.sh
 ```
 
-> **Note**: the firewall requires `--cap-add=NET_ADMIN --cap-add=NET_RAW` at container launch. Add these flags to `claude-container.sh` if needed.
+> **Note** : le pare-feu exige `--cap-add=NET_ADMIN --cap-add=NET_RAW` au lancement du conteneur.
+> Ajouter ces options à `claude-code-container.sh` si besoin.
 
-## Customization
+## Personnalisation
 
-### Adding domains to the firewall
+### Ajouter des domaines au pare-feu
 
-Edit the `for domain in ...` loop in `init-firewall.sh`.
+Éditer la boucle `for domain in ...` de `init-firewall.sh`.
 
-# Fix: WebSocket missing with Caido SDK on Node < 21
+## Annexe — WebSocket manquant avec le SDK Caido sous Node < 21
 
-## Error
+### Erreur
 
 ```
 Error: WebSocket implementation missing; on Node you can `import WebSocket from 'ws';`
 and pass `webSocketImpl: WebSocket` to `createClient`
 ```
 
-## Cause
+### Cause
 
-Node < 21 does not expose a global `WebSocket`. The Caido SDK (`@caido/sdk-client`) uses `graphql-ws` under the hood, which expects `globalThis.WebSocket` to exist.
+Node < 21 n'expose pas de `WebSocket` global. Le SDK Caido (`@caido/sdk-client`) utilise
+`graphql-ws` en dessous, qui attend `globalThis.WebSocket`.
 
-## Fix
+### Correctif
 
-Add at the top of `lib/client.ts`, **before** the SDK import:
+Ajouter en tête de `lib/client.ts`, **avant** l'import du SDK :
 
 ```typescript
 import WebSocket from "ws";
 (globalThis as any).WebSocket = WebSocket;
 ```
 
-Make sure `ws` is installed:
+S'assurer que `ws` est installé :
 
 ```bash
 npm install ws
 ```
 
-## Typical context
+### Contexte typique
 
-Happens when running the client inside a container or any Node 20 environment where `ws` is present in `node_modules` but not exposed globally.
+Se produit en exécutant le client dans un conteneur ou tout autre environnement Node 20 où `ws` est
+présent dans `node_modules` mais n'est pas exposé globalement.

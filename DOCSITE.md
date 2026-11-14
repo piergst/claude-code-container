@@ -1,22 +1,23 @@
 # Documentation contract
 
 This repository belongs to an account enumerated by an external documentation site (the `accounts`
-of the `projects.yml` in the doc-site repository). For a repository of that account, the site reads
-two files at the repository root and reads nothing else — `README.md` is not part of the page. A
-repository carrying neither of them gets no page: it is listed, flagged, on the site's repository
-list.
+of the `projects.yml` in the doc-site repository). For a repository of that account, the site renders
+the repository page from `README.md` and the status page from `STATUS.md`, both at the repository
+root, and reads nothing else. A repository carrying neither of them gets no page: it is listed,
+flagged, on the site's repository list.
 
 ## Language
 
-`USAGE.md` and `STATUS.md` are written in French. This contract stays in English.
+`README.md` and `STATUS.md` are written in French. This contract stays in English.
 
-## `USAGE.md`
+## `README.md`
 
-How the project is used. Only its `h2` and `h3` headings become the page table of contents; deeper
-headings are not listed. Keep it minimalist and action-oriented: short recipes (install, run,
-configure), concrete commands, no prose, no filler.
+What the project is and how it is used. It is the repository page, so it carries the whole content
+of that page. Only its `h2` and `h3` headings become the page table of contents; deeper headings are
+not listed. Keep it minimalist and action-oriented: short recipes (install, run, configure),
+concrete commands, no prose, no filler.
 
-`USAGE.md` may open with YAML front matter carrying a one-line `description` of the project. The
+`README.md` may open with YAML front matter carrying a one-line `description` of the project. The
 repos list shows it as the card text; without it, the site falls back to the opening sentence. Set it
 when the opening sentence is not a good summary:
 
@@ -26,7 +27,7 @@ description: Génère un PDF depuis un fichier Markdown.
 ---
 ```
 
-A change that affects how the project is used belongs in `USAGE.md`. Ask the user before rewriting
+A change that affects how the project is used belongs in `README.md`. Ask the user before rewriting
 the file: extending it is expected, restructuring it is their call.
 
 ## `STATUS.md`
